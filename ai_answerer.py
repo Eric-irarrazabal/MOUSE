@@ -28,26 +28,30 @@ def _build_prompt(question: str, options: list) -> str:
     if options:
         options_text = "\n".join(options)
         return (
-            f"Eres un experto absoluto resolviendo preguntas complejas de tipo Quiz o Test.\n\n"
+            f"Ejerces el rol del mejor experto analítico del mundo resolviendo preguntas complejas de tipo Quiz o Test.\n"
+            f"Tu ÚNICO objetivo es la PRECISIÓN ABSOLUTA (100% de exactitud). No importa cuánto texto necesites generar para estar seguro, prioriza la corrección por sobre cualquier otra cosa.\n\n"
             f"=== CONTEXTO DETECTADO EN PANTALLA ===\n{question}\n\n"
             f"=== OPCIONES (MULTIPLE CHOICE) ===\n{options_text}\n\n"
-            f"INSTRUCCIONES CRÍTICAS:\n"
-            f"1. Eres un sistema altamente inteligente. Lee cuidadosamente el texto detectado, identifica la verdadera pregunta (ignorando el ruido) y deduce cuál de las Opciones es la respuesta correcta.\n"
-            f"2. Primero, bajo la etiqueta exacta 'RAZONAMIENTO:', debes pensar paso a paso. Analiza las pistas, descarta lógicamente las opciones que son falsas y deduce con precisión la correcta.\n"
-            f"3. Segundo, bajo la etiqueta exacta 'RESPUESTA:', debes escribir ÚNICA Y EXCLUSIVAMENTE el texto de la opción elegida (ej. 'B 1986').\n\n"
+            f"INSTRUCCIONES CRÍTICAS DE RAZONAMIENTO:\n"
+            f"1. Piensa paso a paso bajo la etiqueta 'RAZONAMIENTO:'.\n"
+            f"2. Primero, analiza qué está preguntando exactamente el enunciado. Identifica trampas, palabras clave (ej. 'NO', 'EXCEPTO', 'SIEMPRE').\n"
+            f"3. Revisa cada una de las opciones propuestas una por una. Explica por qué es correcta o incorrecta basándote en hechos irrefutables.\n"
+            f"4. Haz una doble verificación interna antes de concluir (¿estoy absolutamente seguro?).\n"
+            f"5. Finalmente, bajo la etiqueta 'RESPUESTA:', escribe ÚNICA Y EXCLUSIVAMENTE el texto literal de la opción que has deducido como correcta (ej. 'B 1986' si la opción era 'B 1986'). Sin añadir puntos ni comillas si no están en la opción.\n\n"
             f"EJEMPLO ESPERADO:\n"
-            f"RAZONAMIENTO: El texto trata sobre... sabemos que el suceso ocurrió en... por lo que descartamos A y C...\n"
-            f"RESPUESTA: B 1986"
+            f"RAZONAMIENTO: La pregunta pide identificar la excepción. Analisis opción por opción... En conclusión, estoy 100% seguro de mi decisión.\n"
+            f"RESPUESTA: C El metabolismo celular"
         )
     else:
         return (
-            f"Eres un experto absoluto analizando y respondiendo preguntas.\n\n"
+            f"Ejerces el rol del mejor experto analítico del mundo.\n"
+            f"Tu ÚNICO objetivo es la PRECISIÓN ABSOLUTA. Analiza en profundidad la pregunta antes de responder.\n\n"
             f"=== CONTEXTO DETECTADO EN PANTALLA ===\n{question}\n\n"
             f"INSTRUCCIONES CRÍTICAS:\n"
-            f"1. Piensa paso a paso y analiza muy cuidadosamente la intención de la pregunta detectada en el contexto.\n"
-            f"2. Formato EXACTO de respuesta:\n"
-            f"   RAZONAMIENTO: [tu análisis detallado buscando evitar caer en trampas argumentativas]\n"
-            f"   RESPUESTA: [tu conclusión final directa en 1-2 sentencias]"
+            f"1. Piensa lenta y meticulosamente bajo 'RAZONAMIENTO:'. Reflexiona sobre los matices de lo que se pregunta, evalúa posibles interpretaciones erróneas y aclara cualquier ambigüedad.\n"
+            f"2. Formato EXACTO a usar al final:\n"
+            f"   RAZONAMIENTO: [tu análisis destructivo paso a paso de por qué esta será la respuesta irrefutable]\n"
+            f"   RESPUESTA: [tu conclusión final directa, concisa y 100% precisa en 1 o 2 sentencias]"
         )
 
 
@@ -60,7 +64,7 @@ def _call_groq(prompt: str, api_key: str) -> str:
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.0,
-        "max_tokens": 1024,
+        "max_tokens": 2048,
     }
 
     response = requests.post(
@@ -82,8 +86,8 @@ def _call_gemini(prompt: str, api_key: str) -> str:
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
-            "temperature": 0.3,
-            "maxOutputTokens": 300,
+            "temperature": 0.0,
+            "maxOutputTokens": 1000,
         }
     }
 
