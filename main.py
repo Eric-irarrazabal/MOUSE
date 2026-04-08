@@ -155,7 +155,7 @@ class ScreenAnalyzer:
 
         print(f"[INFO] Intervalo de captura: {self.interval}s")
         print("[INFO] Modo SIGILOSO activo. No habrá ventana flotante.")
-        print("[INFO] El mouse se convertirá en un dedo (👆) cuando pases sobre la respuesta correcta.\n")
+        print("[INFO] El mouse se convertirá en una mano cuando pases sobre la respuesta correcta.\n")
 
         self.running = True
         self.analysis_thread = threading.Thread(target=self._analysis_loop, daemon=True)
