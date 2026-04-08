@@ -99,8 +99,13 @@ class ScreenAnalyzer:
                         break
 
         if correct_box:
-            print(f"[STEALTH] Creando proxy invisible en {correct_box}")
+            print(f"[STEALTH] ¡Encontró la respuesta exacta! Resaltando en azul ({correct_box})")
             self.overlay.schedule(0, lambda: self.overlay.show_correct_answer_proxy(correct_box))
+        else:
+            print(f"[STEALTH] No se pudo machear el texto OCR con la respuesta '{respuesta}'. Mostrando rectangulo azul de aviso en esquina superior.")
+            # Crear una cajita fallback azul arriba a la izquierda para demostrar que la IA respondió
+            fallback_box = {"x": 50, "y": 50, "w": 40, "h": 40}
+            self.overlay.schedule(0, lambda: self.overlay.show_correct_answer_proxy(fallback_box))
 
     def _analysis_loop(self):
         """Background thread: capture → OCR → analyze → answer → update StealthOverlay."""

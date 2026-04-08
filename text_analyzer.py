@@ -64,7 +64,7 @@ def _is_noise(line: str) -> bool:
     return False
 
 
-def _clean_text(raw_text: str) -> list:
+def _clean_text(raw_text: str) -> list[str]:
     """Remove noise and return clean lines."""
     lines = raw_text.split("\n")
     clean_lines = []
@@ -75,13 +75,13 @@ def _clean_text(raw_text: str) -> list:
     return clean_lines
 
 
-def _find_question(lines: list) -> str | None:
+def _find_question(lines: list[str]) -> str | None:
     """Find the most likely question in the text (handles multiline)."""
     all_patterns = QUESTION_INDICATORS_ES + QUESTION_INDICATORS_EN
     candidates = []
 
     for i, line in enumerate(lines):
-        score = 0
+        score: int = 0
         for pattern in all_patterns:
             if re.search(pattern, line, re.IGNORECASE):
                 score += 1
@@ -149,7 +149,7 @@ def _find_question(lines: list) -> str | None:
     return " ".join(question_lines)
 
 
-def _find_options(lines: list) -> list:
+def _find_options(lines: list[str]) -> list[str]:
     """Find answer options in the text."""
     options = []
     for line in lines:
@@ -160,7 +160,7 @@ def _find_options(lines: list) -> list:
     return options
 
 
-def _determine_clarity(question: str | None, options: list) -> str:
+def _determine_clarity(question: str | None, options: list[str]) -> str:
     """Determine how clear the question is."""
     if not question:
         return "no_detectada"
@@ -171,7 +171,7 @@ def _determine_clarity(question: str | None, options: list) -> str:
     return "ambigua"
 
 
-def _clean_lines_data(lines_data: list) -> list:
+def _clean_lines_data(lines_data: list[dict]) -> list[dict]:
     """Remove noise and return clean line objects."""
     clean_lines = []
     for line_obj in lines_data:
@@ -180,7 +180,7 @@ def _clean_lines_data(lines_data: list) -> list:
     return clean_lines
 
 
-def _find_question_from_data(lines_data: list) -> str | None:
+def _find_question_from_data(lines_data: list[dict]) -> str | None:
     """Find the specific sentence that forms the question."""
     if not lines_data:
         return None
@@ -188,7 +188,7 @@ def _find_question_from_data(lines_data: list) -> str | None:
     return _find_question(texts)
 
 
-def _find_options_from_data(lines_data: list) -> list:
+def _find_options_from_data(lines_data: list[dict]) -> list[dict]:
     """Find answer options in the text and return them with bounding boxes."""
     options = []
     import re
@@ -209,7 +209,7 @@ def _find_options_from_data(lines_data: list) -> list:
     return options
 
 
-def analyze_lines(lines_data: list) -> dict:
+def analyze_lines(lines_data: list[dict]) -> dict:
     if not lines_data:
         return {
             "pregunta_detectada": None,

@@ -55,9 +55,10 @@ class StealthOverlay:
         self.proxy_window.attributes("-topmost", True)
         
         # Make the proxy window catch mouse events by having a slight alpha
+        # Hacer que la ventana proxy sea ligeramente visible para demostrar que la IA sabe la respuesta
         self.proxy_window.attributes("-transparentcolor", "")
-        self.proxy_window.attributes("-alpha", 0.02)
-        self.proxy_window.configure(bg="black")
+        self.proxy_window.attributes("-alpha", 0.15)  # 15% opacidad para que se vea claramente el resaltado
+        self.proxy_window.configure(bg="blue")  # Un bloque azul tenue sobre el texto correcto
 
         # Set cursor to hand
         self.proxy_window.config(cursor="hand2")
