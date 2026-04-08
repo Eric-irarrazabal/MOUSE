@@ -1,9 +1,8 @@
 """
-Stealth Overlay Module (Canvas Cracked Style)
+Stealth Overlay Module
 Creates an invisible, transparent widget over the correct answer.
 When hovered, it automatically changes the mouse to a hand cursor.
 When clicked, it clicks the actual browser element underneath.
-Supports shared Tk root for running alongside the visible overlay.
 """
 
 import tkinter as tk
@@ -22,14 +21,9 @@ except Exception:
 
 
 class StealthOverlay:
-    def __init__(self, root=None):
-        if root:
-            self.root = root
-            self._owns_root = False
-        else:
-            self.root = tk.Tk()
-            self.root.withdraw()
-            self._owns_root = True
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.withdraw()
 
         self.proxy_window = None
         self.is_active = True
@@ -42,8 +36,7 @@ class StealthOverlay:
 
         x, y, w, h = box["x"], box["y"], box["w"], box["h"]
 
-        # Quiz buttons usually span wide horizontally and have some vertical padding.
-        # Tesseract only gives the coordinates of the text itself.
+        # Quiz buttons usually span wide. Tesseract only gives text coordinates.
         pad_left = 30
         pad_right = 200
         pad_y = 15
@@ -58,7 +51,7 @@ class StealthOverlay:
         self.proxy_window.overrideredirect(True)
         self.proxy_window.attributes("-topmost", True)
 
-        # Make the proxy window catch mouse events by having a slight alpha
+        # Slight alpha to catch mouse events
         self.proxy_window.attributes("-transparentcolor", "")
         self.proxy_window.attributes("-alpha", 0.02)
         self.proxy_window.configure(bg="black")
@@ -67,14 +60,9 @@ class StealthOverlay:
         self.proxy_window.config(cursor="hand2")
 
         def on_click(e):
-            # 1. Hide the proxy instantly
             self.clear_proxy()
-
-            # 2. Force OS to update
             self.root.update()
             time.sleep(0.05)
-
-            # 3. Simulate true click exactly where mouse is
             mx, my = pyautogui.position()
             pyautogui.click(mx, my)
 
@@ -86,8 +74,7 @@ class StealthOverlay:
             self.proxy_window = None
 
     def run(self):
-        if self._owns_root:
-            self.root.mainloop()
+        self.root.mainloop()
 
     def schedule(self, ms, func):
         self.root.after(ms, func)
