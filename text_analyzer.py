@@ -75,76 +75,82 @@ def _clean_text(raw_text: str) -> list[str]:
     return clean_lines
 
 
-def _find_question(lines: list[str]) -> str | None:
-    """Find the most likely question in the text (handles multiline)."""
+def _find_question(lines_data: list[dict]) -> str | None:
+    """Find the most likely question in the text using Y-coordinates to avoid merging distant noise."""
     all_patterns = QUESTION_INDICATORS_ES + QUESTION_INDICATORS_EN
     candidates = []
 
-    for i, line in enumerate(lines):
+    for i, line_obj in enumerate(lines_data):
+        line = line_obj["text"]
         score: int = 0
         for pattern in all_patterns:
             if re.search(pattern, line, re.IGNORECASE):
                 score += 1
-        # Bonus for question marks
         if "?" in line:
             score += 3
         if "¿" in line:
             score += 3
 
         if score > 0:
-            candidates.append((score, i, line))
+            candidates.append((score, i, line_obj))
 
     if not candidates:
-        # Fallback: if no question mark, but options exist, just return the line before options
-        for i, line in enumerate(lines):
+        for i, line_obj in enumerate(lines_data):
             for pattern in OPTION_PATTERNS:
-                if re.match(pattern, line):
-                    if i > 0:
-                        return lines[i-1]
+                if re.match(pattern, line_obj["text"]) and i > 0:
+                    return lines_data[i-1]["text"]
         return None
 
-    # Sort by score descending
     candidates.sort(key=lambda x: x[0], reverse=True)
     best_idx = candidates[0][1]
-    best_line = candidates[0][2]
+    best_line_obj = candidates[0][2]
+    best_line = best_line_obj["text"]
 
-    # Try to combine with previous lines if they seem part of the same sentence
     question_lines = [best_line]
     
-    # Go backwards to collect the start of the question
-    # Only if the best_line doesn't already start with '¿'
-    if not best_line.strip().startswith("¿"):
-        curr_idx = best_idx - 1
-        while curr_idx >= 0:
-            prev_line = lines[curr_idx]
-            # Stop merging if it's an option or very short
-            if any(re.match(p, prev_line) for p in OPTION_PATTERNS):
-                break
-            if len(prev_line) < 3:
-                break
-                
-            question_lines.insert(0, prev_line)
-            
-            # Stop if we found the start of the question ('¿')
-            if "¿" in prev_line:
-                break
-                
-            curr_idx -= 1
+    # Go backwards carefully
+    curr_idx = best_idx - 1
+    while curr_idx >= 0:
+        prev_obj = lines_data[curr_idx]
+        prev_line = prev_obj["text"]
         
-    # Go forwards to collect the end of the question (if split across multiple lines, e.g. options come later)
-    # Only if the best line didn't end in '?'
-    if "?" not in best_line:
-        curr_idx = best_idx + 1
-        while curr_idx < len(lines):
-            next_line = lines[curr_idx]
-            if any(re.match(p, next_line) for p in OPTION_PATTERNS):
-                break
+        # Stop if distance is too big (e.g. > 60 pixels)
+        distance = best_line_obj["top"] - (prev_obj["top"] + prev_obj["height"])
+        if distance > 60:
+            break
             
-            question_lines.append(next_line)
-            if "?" in next_line:
-                break
-                
-            curr_idx += 1
+        if any(re.match(p, prev_line) for p in OPTION_PATTERNS):
+            break
+        if len(prev_line) < 3:
+            break
+            
+        question_lines.insert(0, prev_line)
+        best_line_obj = prev_obj  # update reference for next distance check
+        
+        if "¿" in prev_line:
+            break
+        curr_idx -= 1
+        
+    # Go forwards carefully
+    curr_idx = best_idx + 1
+    best_line_obj = candidates[0][2]
+    while curr_idx < len(lines_data):
+        next_obj = lines_data[curr_idx]
+        next_line = next_obj["text"]
+        
+        distance = next_obj["top"] - (best_line_obj["top"] + best_line_obj["height"])
+        if distance > 60:
+            break
+            
+        if any(re.match(p, next_line) for p in OPTION_PATTERNS):
+            break
+        
+        question_lines.append(next_line)
+        best_line_obj = next_obj
+        
+        if "?" in next_line:
+            break
+        curr_idx += 1
 
     return " ".join(question_lines)
 
@@ -184,8 +190,7 @@ def _find_question_from_data(lines_data: list[dict]) -> str | None:
     """Find the specific sentence that forms the question."""
     if not lines_data:
         return None
-    texts = [obj["text"] for obj in lines_data]
-    return _find_question(texts)
+    return _find_question(lines_data)
 
 
 def _find_options_from_data(lines_data: list[dict]) -> list[dict]:
