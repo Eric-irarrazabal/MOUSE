@@ -1,3 +1,5 @@
 mss
 pytesseract
 Pillow
+requests
+pyautogui

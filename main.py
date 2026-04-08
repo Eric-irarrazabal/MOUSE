@@ -15,7 +15,7 @@ from ai_answerer import ask_ai
 from stealth_overlay import StealthOverlay
 
 
-def load_api_key() -> str:
+def load_api_key() -> str | None:
     """Load API key from config.env file."""
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.env")
 
@@ -62,23 +62,41 @@ class ScreenAnalyzer:
         print(f"\n[AI] Contexto proporcionado ({len(question_context)} chars)")
         print(f"[AI] Respuesta: {respuesta}")
 
-        # Find which OCR option matches the AI's answer
+        import re
+        def clean_text(s): 
+            return re.sub(r'[^A-Z0-9]', '', s.upper())
+            
         correct_box = None
-        # the AI answer might be exactly the option text, or contain the option text
+        c_resp = clean_text(respuesta)
+        
+        # 1. Intentar limpiar puntuación y buscar coincidencias completas
         for opt in options_data:
-            text = opt["text"].upper()
-            resp = respuesta.upper()
-            if text in resp or resp in text:
+            c_text = clean_text(opt["text"])
+            if c_text and c_resp and (c_text in c_resp or c_resp in c_text):
                 correct_box = opt["box"]
                 break
                 
-        # If no precise match, fallback to a softer match
+        # 2. Si no coincide, intentar buscar la primera letra (opción)
         if not correct_box:
-            for opt in options_data:
-                # Check if just the first 3 chars match e.g. "A)"
-                if opt["text"][:3].upper() in respuesta.upper():
-                    correct_box = opt["box"]
-                    break
+            # Capturar 'A', 'B', '1', etc. al inicio de la respuesta de la IA
+            m_resp = re.search(r'^([A-E1-5])\b', respuesta.strip().upper())
+            if m_resp:
+                target_letter = m_resp.group(1)
+                for opt in options_data:
+                    # Capturar 'A)', 'A.', 'A -' del OCR
+                    m_opt = re.search(r'^([A-E1-5])[\)\.\-\s]', opt["text"].strip().upper())
+                    if m_opt and m_opt.group(1) == target_letter:
+                        correct_box = opt["box"]
+                        break
+                        
+        # 3. Nivel de emergencia, buscar si la letra suelta está al principio del texto fallido del OCR
+        if not correct_box and len(respuesta.strip()) > 0:
+            target_letter = respuesta.strip()[0].upper()
+            if target_letter in "ABCDE12345":
+                for opt in options_data:
+                    if opt["text"].strip().upper().startswith(target_letter):
+                        correct_box = opt["box"]
+                        break
 
         if correct_box:
             print(f"[STEALTH] Creando proxy invisible en {correct_box}")
