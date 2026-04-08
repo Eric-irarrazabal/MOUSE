@@ -1,6 +1,7 @@
 """
 Screen Analyzer — Real-time Question Detector + AI Answerer
-Main entry point that ties together screen capture, OCR, text analysis, AI answering, and GUI overlay.
+Main entry point that ties together screen capture, OCR, text analysis,
+AI answering (two-pass verification), visible overlay, and stealth proxy.
 """
 
 import threading
@@ -11,7 +12,8 @@ import os
 from capture import capture_screen
 from ocr_engine import extract_lines_with_boxes, setup_tesseract
 from text_analyzer import analyze_lines
-from ai_answerer import ask_ai
+from ai_answerer import ask_ai, match_to_option_index
+from overlay import OverlayWindow
 from stealth_overlay import StealthOverlay
 
 
@@ -36,73 +38,87 @@ def load_api_key() -> str:
 
 
 class ScreenAnalyzer:
-    """Main application controller."""
+    """Main application controller with dual overlay (visible + stealth)."""
 
     def __init__(self, interval: float = 3.0, api_key: str = None):
         self.interval = interval
         self.api_key = api_key
         self.running = False
-        self.overlay = StealthOverlay()
-        self.analysis_thread = None
         self.last_question = None
+        self.analysis_thread = None
+
+        # Create visible overlay window (primary Tk root)
+        self.overlay_window = OverlayWindow()
+
+        # Create stealth overlay sharing the same Tk root
+        self.stealth = StealthOverlay(root=self.overlay_window.root)
 
     def _answer_question(self, question_context: str, options_data: list):
-        """Ask AI and trigger the stealth hover proxy."""
+        """Ask AI with two-pass verification and update both overlays."""
         if not self.api_key:
             return
+
+        # Show loading state in visible overlay
+        self.overlay_window.schedule(0, self.overlay_window.set_answer_loading)
 
         # Build simple text list for the AI prompt
         options_text = [opt["text"] for opt in options_data]
         ai_result = ask_ai(question_context, options_text, self.api_key)
 
+        # Update visible overlay with full result
+        self.overlay_window.schedule(
+            0, lambda r=ai_result: self.overlay_window.update_answer(r)
+        )
+
         respuesta = ai_result.get("respuesta")
+        confianza = ai_result.get("confianza", 0)
+
         if not respuesta:
             return
-            
-        print(f"\n[AI] Contexto proporcionado ({len(question_context)} chars)")
-        print(f"[AI] Respuesta: {respuesta}")
 
-        # Find which OCR option matches the AI's answer
-        correct_box = None
-        # the AI answer might be exactly the option text, or contain the option text
-        for opt in options_data:
-            text = opt["text"].upper()
-            resp = respuesta.upper()
-            if text in resp or resp in text:
-                correct_box = opt["box"]
-                break
-                
-        # If no precise match, fallback to a softer match
-        if not correct_box:
-            for opt in options_data:
-                # Check if just the first 3 chars match e.g. "A)"
-                if opt["text"][:3].upper() in respuesta.upper():
-                    correct_box = opt["box"]
-                    break
+        print(f"\n[AI] Respuesta: {respuesta}")
+        print(f"[AI] Confianza: {confianza}%")
+        print(f"[AI] Pasadas: {ai_result.get('pass_count', 1)}")
 
-        if correct_box:
+        # Only activate stealth proxy if confidence >= 95%
+        if confianza < 95:
+            print(f"[STEALTH] Confianza insuficiente ({confianza}%), proxy NO activado")
+            return
+
+        # Use precise matching
+        match_idx = match_to_option_index(respuesta, options_text)
+
+        if match_idx is not None:
+            correct_box = options_data[match_idx]["box"]
             print(f"[STEALTH] Creando proxy invisible en {correct_box}")
-            self.overlay.schedule(0, lambda: self.overlay.show_correct_answer_proxy(correct_box))
+            self.stealth.schedule(
+                0, lambda b=correct_box: self.stealth.show_correct_answer_proxy(b)
+            )
+        else:
+            print(f"[STEALTH] No se pudo mapear respuesta a opcion")
 
     def _analysis_loop(self):
-        """Background thread: capture → OCR → analyze → answer → update StealthOverlay."""
+        """Background thread: capture -> OCR -> analyze -> answer -> update overlays."""
         while self.running:
             try:
                 image = capture_screen()
-                # OCR Grouped by Lines with Bounding Boxes
                 lines_data = extract_lines_with_boxes(image)
-                # Analyze
                 analysis = analyze_lines(lines_data)
+
+                # Update visible overlay with detection results
+                self.overlay_window.schedule(
+                    0, lambda a=analysis: self.overlay_window.update_results(a)
+                )
 
                 question = analysis.get("pregunta_detectada")
                 if question and question != self.last_question:
                     self.last_question = question
                     options_data = analysis.get("opciones_detectadas", [])
                     print(f"\n[DETECTADO] Nueva pregunta:\n{question}")
-                    
+
                     if options_data:
                         # Clear any existing proxy since screen changed
-                        self.overlay.schedule(0, self.overlay.clear_proxy)
+                        self.stealth.schedule(0, self.stealth.clear_proxy)
                         context = analysis.get("contexto_completo") or question
                         answer_thread = threading.Thread(
                             target=self._answer_question,
@@ -120,12 +136,19 @@ class ScreenAnalyzer:
                     return
                 time.sleep(0.1)
 
+    def _resume(self):
+        """Resume analysis after pause."""
+        self.running = True
+        self.last_question = None
+        self.analysis_thread = threading.Thread(target=self._analysis_loop, daemon=True)
+        self.analysis_thread.start()
+
     def start(self):
-        """Start the analyzer."""
-        print("[INFO] Screen Analyzer + AI (STEALTH MODE) - Iniciando...")
+        """Start the analyzer with dual overlay system."""
+        print("[INFO] Screen Analyzer + AI (DUAL MODE) - Iniciando...")
 
         if not setup_tesseract():
-            print("\n❌ ERROR: Tesseract OCR no encontrado.")
+            print("\nERROR: Tesseract OCR no encontrado.")
             sys.exit(1)
 
         print("[OK] Tesseract encontrado.")
@@ -133,19 +156,24 @@ class ScreenAnalyzer:
         if self.api_key:
             print(f"[OK] API key configurada: {self.api_key[:10]}...")
         else:
-            print("[WARN] No hay API key. El programa detectará preguntas pero NO las responderá.")
+            print("[WARN] No hay API key. El programa detectara preguntas pero NO las respondera.")
 
         print(f"[INFO] Intervalo de captura: {self.interval}s")
-        print("[INFO] Modo SIGILOSO activo. No habrá ventana flotante.")
-        print("[INFO] El mouse se convertirá en un dedo (👆) cuando pases sobre la respuesta correcta.\n")
+        print("[INFO] Ventana flotante VISIBLE con resultados en tiempo real.")
+        print("[INFO] Proxy sigiloso se activa SOLO con confianza >= 95%.")
+        print("[INFO] El cursor cambiara a mano sobre la respuesta correcta.\n")
 
         self.running = True
         self.analysis_thread = threading.Thread(target=self._analysis_loop, daemon=True)
         self.analysis_thread.start()
 
-        # Run GUI loop strictly to keep Tkinter / Proxy alive
+        # Connect pause/resume callbacks
+        self.overlay_window.on_pause_callback = lambda: setattr(self, 'running', False)
+        self.overlay_window.on_resume_callback = self._resume
+
+        # Run the overlay window's mainloop (drives both overlay and stealth proxy)
         try:
-            self.overlay.run()
+            self.overlay_window.run()
         except KeyboardInterrupt:
             pass
         finally:
@@ -157,7 +185,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="🔍 Screen Analyzer + AI - Detector y respondedor de preguntas en tiempo real"
+        description="Screen Analyzer + AI - Detector y respondedor de preguntas en tiempo real"
     )
     parser.add_argument(
         "-i", "--interval",
@@ -169,7 +197,7 @@ def main():
         "-k", "--api-key",
         type=str,
         default=None,
-        help="Gemini API key (también puede configurarse en config.env)"
+        help="API key (Gemini o Groq, tambien puede configurarse en config.env)"
     )
     args = parser.parse_args()
 
